@@ -33,7 +33,7 @@ android {
 
 dependencies {
     // Riconoscimento vocale offline
-    implementation('com.alphacephei:vosk-android:0.3.47') { exclude group: 'net.java.dev.jna' }
+    implementation('com.alphacephei:vosk-android:0.3.75') { exclude group: 'net.java.dev.jna' }
     implementation 'net.java.dev.jna:jna:5.19.1@aar'
 
     testImplementation 'junit:junit:4.13.2'
