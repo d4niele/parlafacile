@@ -1,0 +1,4 @@
+# Correzioni automatiche applicate dopo la trascrizione:   sbagliato = giusto
+# Copia questo file in "sostituzioni.txt". Valgono per parole intere,
+# senza distinguere maiuscole/minuscole. Si rilegge da solo.
+Rosi = Rossi

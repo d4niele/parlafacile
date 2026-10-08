@@ -1,0 +1,31 @@
+# build e strumenti scaricati da setup.sh
+.gradle/
+.strumenti/
+build/
+app/build/
+local.properties
+*.apk
+*.aab
+
+# modello vocale (lo scarica setup.sh)
+app/src/main/assets/model-it/
+
+# ambienti Python
+.venv-whisper/
+.venv*/
+__pycache__/
+
+# parole e correzioni personali del server (si parte dai file .example)
+server/parole.txt
+server/sostituzioni.txt
+
+# registrazioni di test
+audio/
+*.wav
+whisper.log
+
+# editor / sistema
+.idea/
+*.iml
+.DS_Store
+ParlaFacile/

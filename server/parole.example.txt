@@ -1,0 +1,6 @@
+# Parole e nomi che Whisper deve riconoscere bene (una per riga).
+# Copia questo file in "parole.txt" e mettici i nomi dei tuoi familiari, i paesi,
+# le parole in dialetto. Le righe che iniziano con # sono commenti.
+# Il file si rilegge da solo: non serve riavviare il server.
+Rossi
+Salerno

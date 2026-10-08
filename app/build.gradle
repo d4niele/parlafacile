@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' }
+
+android {
+    namespace 'it.parlafacile'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "it.parlafacile"
+        minSdk 21          // Vosk richiede Android 5+ (LineageOS sul Nexus 7: 7.1 / 11)
+        targetSdk 30       // Android 11 = LineageOS 18.1 "flox"
+        versionCode 1
+        versionName "1.0"
+        ndk { abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64' }  // Nexus 7 2013 = armeabi-v7a
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.debug   // APK installabile subito via adb
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+    androidResources { noCompress 'mdl', 'fst', 'int', 'conf', 'mat', 'txt' }
+    lint { abortOnError false; checkReleaseBuilds false }
+}
+
+dependencies {
+    // Riconoscimento vocale offline
+    implementation('com.alphacephei:vosk-android:0.3.47') { exclude group: 'net.java.dev.jna' }
+    implementation 'net.java.dev.jna:jna:5.13.0@aar'
+}
