@@ -1,4 +1,4 @@
 # Solo per i test: non serve faster-whisper (il modello si sostituisce con un finto trascrittore)
-pytest>=8
+pytest>=9.1.1
 numpy
 ruff
