@@ -23,11 +23,18 @@ android {
         targetCompatibility JavaVersion.VERSION_1_8
     }
     androidResources { noCompress 'mdl', 'fst', 'int', 'conf', 'mat', 'txt' }
-    lint { abortOnError false; checkReleaseBuilds false }
+    lint {
+        abortOnError true            // gli errori di lint fanno fallire la build (le segnalazioni minori no)
+        checkReleaseBuilds false
+        lintConfig file('lint.xml')
+    }
+    testOptions { unitTests.returnDefaultValues = true }
 }
 
 dependencies {
     // Riconoscimento vocale offline
     implementation('com.alphacephei:vosk-android:0.3.47') { exclude group: 'net.java.dev.jna' }
     implementation 'net.java.dev.jna:jna:5.13.0@aar'
+
+    testImplementation 'junit:junit:4.13.2'
 }

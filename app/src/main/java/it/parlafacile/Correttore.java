@@ -40,16 +40,8 @@ public class Correttore {
     private final ExecutorService coda = Executors.newSingleThreadExecutor();
 
     public Correttore(String indirizzo, String modello) {
-        this.indirizzo = urlCompleto(indirizzo);
+        this.indirizzo = Indirizzi.ollama(indirizzo);
         this.modello = (modello == null || modello.trim().isEmpty()) ? "qwen2.5:3b" : modello.trim();
-    }
-
-    public static String urlCompleto(String testo) {
-        String t = testo == null ? "" : testo.trim();
-        if (t.isEmpty()) return "";
-        if (!t.startsWith("http://") && !t.startsWith("https://")) t = "http://" + t;
-        if (!t.substring(t.indexOf("//") + 2).contains("/")) t += "/api/chat";
-        return t;
     }
 
     public boolean attivo() { return !indirizzo.isEmpty(); }
@@ -65,17 +57,13 @@ public class Correttore {
                     final String r = chiedi(testo);
                     if (r.isEmpty() || r.equals(testo)) return;
                     // Si accetta solo se le parole sono identiche: cambia la punteggiatura, non il senso
-                    if (!paroleDi(r).equals(paroleDi(testo))) return;
+                    if (!FiltroTesto.stesseParole(r, testo)) return;
                     principale.post(new Runnable() {
                         @Override public void run() { esito.corretto(testo, r); }
                     });
                 } catch (Exception ignored) { }
             }
         });
-    }
-
-    private static String paroleDi(String t) {
-        return t.toLowerCase(java.util.Locale.ITALIAN).replaceAll("[^\\p{L}\\p{N} ]", " ").trim().replaceAll("\\s+", " ");
     }
 
     private String chiedi(String testo) throws Exception {

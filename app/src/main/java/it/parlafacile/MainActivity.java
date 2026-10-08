@@ -44,7 +44,6 @@ import android.widget.Toast;
 import org.vosk.Model;
 import org.vosk.android.StorageService;
 
-import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Locale;
 
@@ -406,7 +405,7 @@ public class MainActivity extends Activity implements MotoreAscolto.Ascoltatore 
         String modo = modo();
         boolean reteOk = reteDisponibile();
         boolean sistemaOk = MotoreRete.disponibile(this);
-        String url = MotoreWhisper.urlCompleto(indirizzoWhisper());
+        String url = Indirizzi.whisper(indirizzoWhisper());
 
         if (modo.equals("whisper")) return creaWhisper(url);
         if (modo.equals("rete")) return sistemaOk ? motoreRete : null;
@@ -509,23 +508,12 @@ public class MainActivity extends Activity implements MotoreAscolto.Ascoltatore 
 
     /** Comandi vocali: devono essere l'unica cosa detta nella frase. */
     private boolean eseguiComando(String testo) {
-        String t = Normalizer.normalize(testo.toLowerCase(Locale.ITALIAN), Normalizer.Form.NFD)
-                .replaceAll("\\p{M}", "")
-                .replaceAll("[^a-z ]", "")
-                .trim();
-        if (t.equals("cancella") || t.equals("cancella tutto") || t.equals("pulisci")) {
-            cancellaTutto();
-            return true;
+        switch (FiltroTesto.comando(testo)) {
+            case CANCELLA:    cancellaTutto(); return true;
+            case PIU_GRANDE:  cambiaDimensione(+8); return true;
+            case PIU_PICCOLO: cambiaDimensione(-8); return true;
+            default:          return false;
         }
-        if (t.equals("piu grande") || t.equals("ingrandisci") || t.equals("scrivi piu grande")) {
-            cambiaDimensione(+8);
-            return true;
-        }
-        if (t.equals("piu piccolo") || t.equals("rimpicciolisci") || t.equals("scrivi piu piccolo")) {
-            cambiaDimensione(-8);
-            return true;
-        }
-        return false;
     }
 
     /** Dopo 10 minuti senza voci l'ascolto si spegne da solo (risparmio batteria). */
@@ -640,7 +628,7 @@ public class MainActivity extends Activity implements MotoreAscolto.Ascoltatore 
         String modo = modo();
         boolean reteOk = reteDisponibile();
         boolean sistemaOk = MotoreRete.disponibile(this);
-        boolean whisperOk = !MotoreWhisper.urlCompleto(indirizzoWhisper()).isEmpty();
+        boolean whisperOk = !Indirizzi.whisper(indirizzoWhisper()).isEmpty();
         if (modo.equals("whisper")) return whisperOk ? motoreWhisper != null ? motoreWhisper : sentinella() : null;
         if (modo.equals("rete")) return sistemaOk ? motoreRete : null;
         if (modo.equals("auto")) {
@@ -653,7 +641,7 @@ public class MainActivity extends Activity implements MotoreAscolto.Ascoltatore 
 
     /** Segnaposto per "Whisper" quando il motore non è ancora stato creato. */
     private MotoreAscolto sentinella() {
-        return new MotoreWhisper(MotoreWhisper.urlCompleto(indirizzoWhisper()), "", "", null, this);
+        return new MotoreWhisper(Indirizzi.whisper(indirizzoWhisper()), "", "", null, this);
     }
 
     /** Pannello di configurazione nascosto (5 tocchi sulla barra della batteria). */
@@ -767,7 +755,7 @@ public class MainActivity extends Activity implements MotoreAscolto.Ascoltatore 
         prova.setText("Prova connessione");
         prova.setOnClickListener(new View.OnClickListener() {
             @Override public void onClick(View v) {
-                final String url = MotoreWhisper.urlCompleto(campo.getText().toString());
+                final String url = Indirizzi.whisper(campo.getText().toString());
                 if (url.isEmpty()) { esito.setText("Scrivi prima l'indirizzo."); return; }
                 esito.setText("Provo…");
                 new Thread(new Runnable() {
@@ -809,7 +797,7 @@ public class MainActivity extends Activity implements MotoreAscolto.Ascoltatore 
                 .setPositiveButton("Salva", new DialogInterface.OnClickListener() {
                     @Override
                     public void onClick(DialogInterface d, int which) {
-                        int sel = gruppo.getCheckedRadioButtonId() - 100;
+                        int sel = gruppo.indexOfChild(gruppo.findViewById(gruppo.getCheckedRadioButtonId()));
                         prefs.edit()
                                 .putString("modo", codici[Math.max(0, sel)])
                                 .putString("whisper", campo.getText().toString().trim())

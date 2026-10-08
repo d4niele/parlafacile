@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Vulnerabilità di sicurezza
+    url: https://github.com/d4niele/parlafacile/security/advisories/new
+    about: Non aprire una issue pubblica: usa la segnalazione privata.

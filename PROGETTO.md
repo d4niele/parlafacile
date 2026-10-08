@@ -52,6 +52,7 @@ app/src/main/java/it/parlafacile/
 ├── MotoreVosk.java      riconoscimento offline (Vosk)
 ├── MotoreRete.java      riconoscimento di sistema (online), riavviato di continuo
 └── AdminReceiver.java   serve solo alla modalità chiosco (device owner)
+    (e le classi pure Segmentatore, Wav, Indirizzi, FiltroTesto: vedi ARCHITETTURA.md)
 app/src/main/assets/model-it/   modello Vosk italiano (lo scarica setup.sh)
 setup.sh                        installazione automatica via adb
 ```

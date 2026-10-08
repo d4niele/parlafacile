@@ -44,6 +44,10 @@ Il tablet registra la voce, la trasforma in testo con uno di più **motori di ri
 | File | Ruolo |
 |---|---|
 | `MainActivity.java` | Interfaccia unica, scelta del motore, sottotitoli, comandi vocali, batteria, chiosco, pannello di configurazione, collegamento al correttore |
+| `Segmentatore.java` | **Logica pura**: taglia il flusso del microfono in frasi (rilevamento della voce, pre-roll, pausa, taglio a 25 s) |
+| `Wav.java` | **Logica pura**: intestazione WAV |
+| `Indirizzi.java` | **Logica pura**: da `IP:porta` a indirizzo completo; riconosce Google Cloud |
+| `FiltroTesto.java` | **Logica pura**: allucinazioni di Whisper, confronto delle parole, comandi vocali |
 | `MotoreAscolto.java` | Interfaccia comune dei motori (`avvia`, `ferma`, `chiudi`, `attivo`, `nome`) e dell'ascoltatore (`parziale`, `finale`, `errore`) |
 | `MotoreVosk.java` | Riconoscimento offline con Vosk (modello `vosk-model-small-it-0.22`, ~50 MB, in `assets/model-it/`) |
 | `MotoreRete.java` | Riconoscimento di sistema (`SpeechRecognizer`), riavviato di continuo. **Non disponibile su questo tablet** (nessun servizio vocale installato) |
@@ -142,10 +146,11 @@ L'app è registrata come HOME. Con il device owner (`AdminReceiver`) usa Lock Ta
 
 ## 4. Server nel PC di casa (`server/`)
 
-`whisper_server.py` — trascrizione con **faster-whisper** (ambiente separato `.venv-whisper/`).
+Moduli: `whisper_server.py` (avvio, modello faster-whisper, opzioni), `app.py` (server HTTP, password, limiti), `audio.py` (WAV e multipart), `glossario.py` (parole e sostituzioni). Ambiente separato `.venv-whisper/`. Solo `whisper_server.py` importa faster-whisper, così gli altri moduli si provano senza il modello.
 
 - `POST /v1/audio/transcriptions` (campo `file`, WAV; risponde `{"text": "…"}`) e `GET /salute`.
-- Ascolta su `0.0.0.0:8000`. Una trascrizione alla volta (blocco), richieste in parallelo accettate.
+- Ascolta su `0.0.0.0:8000` (cambia con `--indirizzo`). Una trascrizione alla volta (blocco), richieste in parallelo accettate.
+- **Password facoltativa** (`--token` o `PARLAFACILE_TOKEN`): le richieste devono avere `Authorization: Bearer <password>` (il campo *Chiave API* del tablet). `GET /salute` resta libero. Richieste oltre 10 MB rifiutate (413); gli errori interni non rivelano dettagli.
 - Legge direttamente i WAV 16 kHz mono (numpy), senza ffmpeg/PyAV.
 - Filtro dei silenzi attivo (`vad_filter`): spegnerlo rallenta e produce frasi inventate.
 - Riscaldamento del modello all'avvio.
@@ -183,14 +188,24 @@ Il tempo è quasi indipendente dalla lunghezza della frase: ipotesi (non verific
 
 ## 7. Sicurezza e privacy
 
-- Il traffico verso il server di casa è **HTTP in chiaro** (`usesCleartextTraffic`); il server **non ha autenticazione** ed è raggiungibile da tutta la rete locale.
+- Il traffico verso il server di casa è **HTTP in chiaro** (`usesCleartextTraffic`); senza `--token` il server **non ha autenticazione** ed è raggiungibile da tutta la rete locale. Vedi `SECURITY.md`.
 - La copia di Ollama sulla porta 11435 è aperta alla rete locale.
 - La chiave API è salvata **in chiaro** nelle preferenze del tablet.
 - Con Groq, OpenAI o Google l'audio delle conversazioni **esce da casa**; con il server di casa no.
 - `--salva` conserva sul PC i file audio: usarlo solo per i test e cancellarli.
 - Installata ora la versione **debug** (debuggable); la release si costruisce con `setup.sh`.
 
-## 8. Stato di verifica
+## 8. Qualità del codice
+
+| Cosa | Come |
+|---|---|
+| Test app | JUnit sulla JVM (`./gradlew testDebugUnitTest`): `Segmentatore`, `Wav`, `Indirizzi`, `FiltroTesto` |
+| Test server | pytest: glossario, audio/multipart, API HTTP (password, limiti, errori) con un finto trascrittore |
+| Lint | Android lint (gli errori fanno fallire la build), `ruff` per Python |
+| CI | GitHub Actions: test, build dell'APK, lint, ricerca di segreti; Dependabot per le dipendenze |
+| Non coperto da test automatici | Le classi `Motore*` e `MainActivity` (microfono, rete, interfaccia): si provano sul tablet |
+
+## 9. Stato di verifica
 
 | Parte | Stato |
 |---|---|
@@ -202,7 +217,7 @@ Il tempo è quasi indipendente dalla lunghezza della frase: ipotesi (non verific
 | Google Cloud | Scritto, **mai provato** (manca la chiave) |
 | Servizio vocale di sistema | Non disponibile sul tablet |
 
-## 9. Limiti noti
+## 10. Limiti noti
 
 - Whisper `small` sbaglia su nomi propri e parole poco comuni; il dialetto stretto non è supportato da Whisper. `medium` è migliore ma impiega più del doppio.
 - Solo CPU: i tempi di 1,4–1,8 s per frase non scendono senza scheda grafica NVIDIA.
@@ -210,10 +225,10 @@ Il tempo è quasi indipendente dalla lunghezza della frase: ipotesi (non verific
 - Whisper non produce testo provvisorio: serve l'ibrido con Vosk.
 - Il server di casa e Ollama non partono da soli all'accensione del PC.
 
-## 10. Possibili sviluppi
+## 11. Possibili sviluppi
 
 - Avvio automatico del server e di Ollama (servizio di sistema).
-- Autenticazione e cifratura verso il server.
+- Cifratura (HTTPS) verso il server.
 - Scheda NVIDIA e modello `large-v3` / `large-v3-turbo`.
 - Regolazione della soglia di voce e della pausa dal pannello.
 - Salvataggio delle conversazioni (con il consenso della famiglia) per addestrare il modello sulla voce e sul dialetto della persona.

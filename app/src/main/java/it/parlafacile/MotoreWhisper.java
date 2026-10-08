@@ -1,5 +1,6 @@
 package it.parlafacile;
 
+import android.annotation.SuppressLint;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
 import android.media.MediaRecorder;
@@ -31,20 +32,8 @@ import java.util.concurrent.Executors;
  */
 public class MotoreWhisper implements MotoreAscolto {
 
-    private static final int FREQUENZA = 16000;
-    private static final int BLOCCO = FREQUENZA / 10;               // 100 ms
-    private static final int PREROLL_BLOCCHI = 3;                   // 300 ms prima della voce
-    private static final int SILENZIO_FINE_BLOCCHI = 8;             // 0,8 s di pausa = frase finita
-    private static final int MIN_VOCE_BLOCCHI = 4;                  // sotto 0,4 s è un rumore
-    private static final int MAX_FRASE_BLOCCHI = 250;               // 25 s: taglio forzato
-    private static final double SOGLIA_MINIMA = 350;                // ampiezza RMS (su 32768)
+    private static final int FREQUENZA = Segmentatore.FREQUENZA;
     private static final int ERRORI_MASSIMI = 2;
-
-    /** Frasi che Whisper inventa sui rumori/silenzi: si scartano. */
-    private static final String[] ALLUCINAZIONI = {
-            "sottotitoli", "amara.org", "grazie per la visione", "grazie a tutti",
-            "iscriviti", "alla prossima", "www."
-    };
 
     private final String indirizzo;
     private final String chiave;
@@ -65,16 +54,6 @@ public class MotoreWhisper implements MotoreAscolto {
         this.chiave = chiave == null ? "" : chiave.trim();
         this.modelloNome = (modello == null || modello.trim().isEmpty()) ? "whisper-1" : modello.trim();
         this.ascoltatore = ascoltatore;
-    }
-
-    /** "192.168.1.20:8000" oppure un indirizzo completo → URL del servizio. */
-    public static String urlCompleto(String testo) {
-        String t = testo == null ? "" : testo.trim();
-        if (t.isEmpty()) return "";
-        if (!t.startsWith("http://") && !t.startsWith("https://")) t = "http://" + t;
-        String senzaProtocollo = t.substring(t.indexOf("//") + 2);
-        if (!senzaProtocollo.contains("/")) t += "/v1/audio/transcriptions";
-        return t;
     }
 
     /** Il modello Vosk può finire di caricarsi dopo l'avvio: si aggancia alla frase successiva. */
@@ -117,6 +96,8 @@ public class MotoreWhisper implements MotoreAscolto {
 
     // ================================================================== microfono
 
+    /** Il permesso del microfono si controlla in MainActivity prima di avviare il motore. */
+    @SuppressLint("MissingPermission")
     private void registra(int mia) {
         if (!serverRaggiungibile()) {
             fallisci(mia, "Server Whisper non raggiungibile");
@@ -129,7 +110,7 @@ public class MotoreWhisper implements MotoreAscolto {
         try {
             mic = new AudioRecord(MediaRecorder.AudioSource.MIC, FREQUENZA,
                     AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-                    Math.max(minimo, BLOCCO * 2 * 4));
+                    Math.max(minimo, Segmentatore.BLOCCO * 2 * 4));
             if (mic.getState() != AudioRecord.STATE_INITIALIZED) {
                 fallisci(mia, "Microfono non disponibile");
                 return;
@@ -138,67 +119,34 @@ public class MotoreWhisper implements MotoreAscolto {
             if (vosk != null) rapido = new Recognizer(vosk, FREQUENZA);
             android.util.Log.d("PF", "whisper: vosk " + (rapido != null ? "attivo" : "ASSENTE (modello null)"));
             StringBuilder voskTesto = new StringBuilder();
-
-            short[] blocco = new short[BLOCCO];
-            short[][] anello = new short[PREROLL_BLOCCHI][];
-            int posAnello = 0, nAnello = 0;
-            ByteArrayOutputStream frase = new ByteArrayOutputStream();
-            boolean inVoce = false;
-            int blocchiVoce = 0, blocchiSilenzio = 0, blocchiFrase = 0;
-            double rumore = 200;   // livello del fruscio di fondo, si adatta
+            Segmentatore segmentatore = new Segmentatore();
+            short[] blocco = new short[Segmentatore.BLOCCO];
 
             while (attivo && mia == sessione) {
-                int letti = mic.read(blocco, 0, BLOCCO);
+                int letti = mic.read(blocco, 0, blocco.length);
                 if (letti <= 0) {
                     if (letti < 0) { fallisci(mia, "Errore del microfono"); return; }
                     continue;
                 }
-                double rms = rms(blocco, letti);
-                double soglia = Math.max(SOGLIA_MINIMA, rumore * 2.5);
-                boolean voce = rms > soglia;
+                boolean giaInVoce = segmentatore.inVoce();
+                Segmentatore.Evento evento = segmentatore.alimenta(blocco, letti);
 
-                if (!inVoce) {
-                    if (!voce) {
-                        rumore = rumore * 0.95 + rms * 0.05;
-                        anello[posAnello] = java.util.Arrays.copyOf(blocco, letti);
-                        posAnello = (posAnello + 1) % PREROLL_BLOCCHI;
-                        nAnello = Math.min(nAnello + 1, PREROLL_BLOCCHI);
-                    } else {
-                        inVoce = true;
-                        frase.reset();
-                        int primo = (posAnello - nAnello + PREROLL_BLOCCHI) % PREROLL_BLOCCHI;
-                        for (int i = 0; i < nAnello; i++) {
-                            scrivi(frase, anello[(primo + i) % PREROLL_BLOCCHI], anello[(primo + i) % PREROLL_BLOCCHI].length);
-                        }
-                        nAnello = 0;
-                        blocchiVoce = 1; blocchiSilenzio = 0; blocchiFrase = 1;
-                        scrivi(frase, blocco, letti);
-                        voskTesto.setLength(0);
-                        if (rapido == null && vosk != null) {
-                            try { rapido = new Recognizer(vosk, FREQUENZA); } catch (Exception ignored) { }
-                        }
-                        if (rapido != null) { rapido.reset(); alimenta(mia, rapido, blocco, letti, voskTesto); }
-                        else segnala(mia, "…");
+                if (evento == Segmentatore.Evento.VOCE_INIZIATA) {
+                    voskTesto.setLength(0);
+                    if (rapido == null && vosk != null) {
+                        try { rapido = new Recognizer(vosk, FREQUENZA); } catch (Exception ignored) { }
                     }
-                } else {
-                    scrivi(frase, blocco, letti);
-                    if (rapido != null) alimenta(mia, rapido, blocco, letti, voskTesto);
-                    blocchiFrase++;
-                    if (voce) { blocchiVoce++; blocchiSilenzio = 0; }
-                    else blocchiSilenzio++;
+                    if (rapido != null) { rapido.reset(); alimenta(mia, rapido, blocco, letti, voskTesto); }
+                    else segnala(mia, "…");
+                } else if (giaInVoce && rapido != null) {
+                    alimenta(mia, rapido, blocco, letti, voskTesto);
+                }
 
-                    if (blocchiSilenzio >= SILENZIO_FINE_BLOCCHI || blocchiFrase >= MAX_FRASE_BLOCCHI) {
-                        if (blocchiVoce >= MIN_VOCE_BLOCCHI) {
-                            if (rapido != null) accoda(voskTesto, testoDi(rapido.getFinalResult(), "text"));
-                            byte[] pcm = frase.toByteArray();
-                            // Il silenzio finale non serve a Whisper: via, tenendo 0,3 s
-                            int tolti = Math.max(0, blocchiSilenzio - 3) * BLOCCO * 2;
-                            manda(mia, java.util.Arrays.copyOf(pcm, Math.max(0, pcm.length - tolti)),
-                                    voskTesto.toString().trim());
-                        }
-                        else segnala(mia, "");
-                        inVoce = false;
-                    }
+                if (evento == Segmentatore.Evento.FRASE_CHIUSA) {
+                    if (rapido != null) accoda(voskTesto, testoDi(rapido.getFinalResult(), "text"));
+                    manda(mia, segmentatore.frase(), voskTesto.toString().trim());
+                } else if (evento == Segmentatore.Evento.FRASE_SCARTATA) {
+                    segnala(mia, "");
                 }
             }
         } catch (Exception e) {
@@ -233,19 +181,6 @@ public class MotoreWhisper implements MotoreAscolto {
         catch (Exception e) { return ""; }
     }
 
-    private static double rms(short[] b, int n) {
-        double somma = 0;
-        for (int i = 0; i < n; i++) somma += (double) b[i] * b[i];
-        return Math.sqrt(somma / n);
-    }
-
-    private static void scrivi(ByteArrayOutputStream o, short[] b, int n) {
-        for (int i = 0; i < n; i++) {
-            o.write(b[i] & 0xFF);
-            o.write((b[i] >> 8) & 0xFF);
-        }
-    }
-
     // ================================================================== server
 
     private boolean serverRaggiungibile() { return raggiungibile(indirizzo); }
@@ -276,7 +211,7 @@ public class MotoreWhisper implements MotoreAscolto {
                     errori = 0;
                     if (mia != sessione) return;
                     segnala(mia, "");
-                    if (!testo.isEmpty() && !allucinazione(testo)) finale(mia, testo);
+                    if (!testo.isEmpty() && !FiltroTesto.allucinazione(testo)) finale(mia, testo);
                 } catch (Exception e) {
                     android.util.Log.d("PF", "errore invio a Whisper: " + e);
                     segnala(mia, "");
@@ -286,8 +221,6 @@ public class MotoreWhisper implements MotoreAscolto {
             }
         });
     }
-
-    private boolean èGoogle() { return indirizzo.contains("speech.googleapis.com"); }
 
     /** Google Cloud Speech-to-Text (v1): JSON con l'audio in base64, chiave nell'indirizzo. */
     private String trascriviGoogle(byte[] pcm) throws Exception {
@@ -328,7 +261,7 @@ public class MotoreWhisper implements MotoreAscolto {
     }
 
     private String trascrivi(byte[] pcm) throws Exception {
-        if (èGoogle()) return trascriviGoogle(pcm);
+        if (Indirizzi.èGoogle(indirizzo)) return trascriviGoogle(pcm);
         String confine = "----parlafacile" + System.currentTimeMillis();
         HttpURLConnection c = (HttpURLConnection) new URL(indirizzo).openConnection();
         c.setConnectTimeout(3000);
@@ -345,7 +278,7 @@ public class MotoreWhisper implements MotoreAscolto {
             campo(o, confine, "temperature", "0");
             o.write(("--" + confine + "\r\nContent-Disposition: form-data; name=\"file\"; "
                     + "filename=\"frase.wav\"\r\nContent-Type: audio/wav\r\n\r\n").getBytes("UTF-8"));
-            o.write(intestazioneWav(pcm.length));
+            o.write(Wav.intestazione(pcm.length, FREQUENZA));
             o.write(pcm);
             o.write(("\r\n--" + confine + "--\r\n").getBytes("UTF-8"));
             o.flush();
@@ -371,38 +304,6 @@ public class MotoreWhisper implements MotoreAscolto {
     private static void campo(OutputStream o, String confine, String nome, String valore) throws Exception {
         o.write(("--" + confine + "\r\nContent-Disposition: form-data; name=\"" + nome
                 + "\"\r\n\r\n" + valore + "\r\n").getBytes("UTF-8"));
-    }
-
-    private static byte[] intestazioneWav(int byteDati) {
-        int lunghezza = byteDati + 36;
-        int byteSec = FREQUENZA * 2;
-        byte[] h = new byte[44];
-        System.arraycopy("RIFF".getBytes(), 0, h, 0, 4);
-        int4(h, 4, lunghezza);
-        System.arraycopy("WAVEfmt ".getBytes(), 0, h, 8, 8);
-        int4(h, 16, 16);
-        h[20] = 1;                      // PCM
-        h[22] = 1;                      // mono
-        int4(h, 24, FREQUENZA);
-        int4(h, 28, byteSec);
-        h[32] = 2;                      // byte per campione
-        h[34] = 16;                     // bit
-        System.arraycopy("data".getBytes(), 0, h, 36, 4);
-        int4(h, 40, byteDati);
-        return h;
-    }
-
-    private static void int4(byte[] b, int pos, int v) {
-        b[pos] = (byte) v;
-        b[pos + 1] = (byte) (v >> 8);
-        b[pos + 2] = (byte) (v >> 16);
-        b[pos + 3] = (byte) (v >> 24);
-    }
-
-    private static boolean allucinazione(String testo) {
-        String t = testo.toLowerCase(java.util.Locale.ITALIAN);
-        for (String a : ALLUCINAZIONI) if (t.contains(a)) return true;
-        return false;
     }
 
     // ================================================================== verso l'app (thread principale)

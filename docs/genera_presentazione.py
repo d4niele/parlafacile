@@ -322,7 +322,7 @@ c.drawString(470, 465, "Da sapere sulla privacy")
 punti(470, 452, 330, 340, [
     "Con il <b>server di casa</b> l'audio non esce dalla rete locale.",
     "Con <b>Groq, OpenAI o Google</b> l'audio delle conversazioni va su un server esterno.",
-    "Il traffico verso il PC di casa è in chiaro e il server non ha password: è raggiungibile da tutta la Wi-Fi di casa.",
+    "Il traffico verso il PC di casa è in chiaro. Senza <b>--token</b> il server non ha password ed è raggiungibile da tutta la Wi-Fi di casa.",
     "La chiave API è salvata in chiaro sul tablet.",
     "Le registrazioni si conservano solo se si attiva <b>--salva</b>, per i test.",
 ], piccolo)
@@ -343,7 +343,7 @@ c.drawString(M, 215, "Prossimi passi")
 punti(M, 202, L - 2 * M, 150, [
     "Scheda grafica NVIDIA nel PC: Whisper più grande e frasi in meno di un secondo.",
     "Avvio automatico del server e di Ollama all'accensione del PC.",
-    "Soglia di voce e pausa regolabili dal pannello; password e cifratura verso il server.",
+    "Soglia di voce e pausa regolabili dal pannello; cifratura (HTTPS) verso il server.",
     "Salvare le conversazioni (con il consenso della famiglia) per migliorare il riconoscimento del dialetto.",
 ], piccolo)
 
