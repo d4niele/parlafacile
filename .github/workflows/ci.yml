@@ -27,7 +27,7 @@ jobs:
         run: ./gradlew --no-daemon testDebugUnitTest assembleDebug lintDebug
       - name: Rapporti di test e lint
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: rapporti-android
           path: |
@@ -35,7 +35,7 @@ jobs:
             app/build/reports/lint-results-debug.html
           if-no-files-found: ignore
       - name: APK di debug
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: parlafacile-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
